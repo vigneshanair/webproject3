@@ -1,84 +1,95 @@
 <?php
-$page_title = 'Case Dashboard – Cryptic Quest';
-require_once __DIR__ . '/includes/config.php';
+require_once 'game_state.php';
+require_detective();
 
-$caseId = get_active_case_id();
-$case   = get_active_case();
-
-if (!$case) {
-    $case = [
-        'title'    => 'No Active Case',
-        'location' => '—',
-        'summary'  => 'Choose a case from the Cases screen.',
-        'suspect'  => '—'
-    ];
+$caseId = (int)($_GET['case'] ?? 1);
+$cases  = get_cases();
+if (!isset($cases[$caseId])) {
+    header('Location: cases.php');
+    exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['advance']) && $caseId) {
-        $current = get_case_progress($caseId);
-        $next    = min(100, $current + 20);
-        set_case_progress($caseId, $next);
-
-        if ($next >= 100) {
-            unlock_next_level((int)$_SESSION['current_level']);
-        }
-
-        header('Location: case_dashboard.php');
-        exit;
-    }
-}
-
-include __DIR__ . '/includes/header.php';
-
+$case = $cases[$caseId];
 $progress = get_case_progress($caseId);
+
+// notebook save
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_notes'])) {
+    save_notes_for_case($caseId, $_POST['notes'] ?? '');
+}
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><?php echo htmlspecialchars($case['title']); ?> – Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<?php render_header('Case Dashboard'); ?>
 
-<section class="card-grid">
-    <article class="card" style="grid-column: span 2;">
-        <div class="page-header">
-            <h1><?php echo htmlspecialchars($case['title']); ?></h1>
-            <p class="page-subtitle">
-                Level <?php echo (int)$case['level']; ?> •
-                Location: <?php echo htmlspecialchars($case['location']); ?>
-            </p>
-        </div>
+<main class="main-layout with-sidebar">
+    <section class="case-dashboard">
+        <a href="cases.php" class="back-button">← Back to Case Board</a>
 
-        <p style="font-size:0.9rem; color:var(--text-soft); margin-bottom:0.9rem;">
-            <?php echo htmlspecialchars($case['summary']); ?>
-        </p>
+        <header class="case-header">
+            <h2><?php echo htmlspecialchars($case['title']); ?></h2>
+            <p class="case-tagline-large"><?php echo htmlspecialchars($case['tagline']); ?></p>
+        </header>
 
-        <ul style="font-size:0.85rem; color:var(--text-soft); padding-left:1.1rem; margin-bottom:1rem;">
-            <li>Collect key evidence and add it to the evidence bag.</li>
-            <li>Run at least one forensic check (fingerprints or patterns).</li>
-            <li>Interrogate the main suspect: <?php echo htmlspecialchars($case['suspect']); ?>.</li>
-            <li>Reconstruct the timeline and lock in your final theory.</li>
-        </ul>
-
-        <form method="post">
-            <button type="submit" name="advance" class="btn">
-                Advance Investigation
-            </button>
-        </form>
-    </article>
-
-    <aside class="card progress-card">
-        <div class="card-title">Investigation Status</div>
-        <p style="font-size:0.85rem; color:var(--text-soft); margin-bottom:0.4rem;">
-            Overall completion of this case.
-        </p>
-
-        <div style="font-size:0.85rem;">
-            Progress: <strong><?php echo $progress; ?>%</strong>
-            <div class="progress-track" style="margin-top:0.35rem;">
-                <div class="progress-fill" style="width: <?php echo $progress; ?>%;"></div>
+        <div class="case-meta">
+            <div class="meta-item">
+                <span class="meta-label">Case ID</span>
+                <span class="meta-value">0<?php echo $caseId; ?></span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Difficulty</span>
+                <span class="meta-value"><?php echo htmlspecialchars($case['difficulty']); ?></span>
+            </div>
+            <div class="meta-item meta-progress">
+                <span class="meta-label">Investigation Progress</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: <?php echo $progress; ?>%;"></div>
+                </div>
+                <span class="progress-label"><?php echo $progress; ?>% complete</span>
             </div>
         </div>
 
-        <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.7rem;">
-            Finish this case to help unlock higher difficulty levels.
-        </p>
-    </aside>
-</section>
+        <section class="case-overview">
+            <h3>Current Investigation</h3>
+            <p>
+                A preliminary report indicates unusual activity surrounding the victim and several key individuals.
+                Your tasks: search the crime scene, interrogate suspects, analyze forensic evidence, and submit a final verdict.
+            </p>
+            <p>
+                Remember: every choice impacts what you discover. Overlook details, and the true culprit might walk free.
+            </p>
+        </section>
 
-<?php include __DIR__ . '/includes/footer.php'; ?>
+        <section class="case-actions">
+            <h3>Investigation Steps</h3>
+            <div class="action-grid">
+                <a class="action-card" href="crime_scene.php?case=<?php echo $caseId; ?>">
+                    <h4>Crime Scene</h4>
+                    <p>Search key zones for physical clues and overlooked evidence.</p>
+                </a>
+                <a class="action-card" href="interrogations.php?case=<?php echo $caseId; ?>">
+                    <h4>Suspects & Interrogations</h4>
+                    <p>Review profiles and question suspects with targeted dialogue.</p>
+                </a>
+                <a class="action-card" href="lab.php?case=<?php echo $caseId; ?>">
+                    <h4>Forensic Lab</h4>
+                    <p>Match fingerprints and compare evidence against statements.</p>
+                </a>
+                <a class="action-card" href="verdict.php?case=<?php echo $caseId; ?>">
+                    <h4>Final Verdict</h4>
+                    <p>Submit your official case report and accuse the culprit.</p>
+                </a>
+            </div>
+        </section>
+    </section>
+
+    <?php render_evidence_bag_sidebar($caseId); ?>
+    <?php render_notebook($caseId); ?>
+</main>
+</body>
+</html>
