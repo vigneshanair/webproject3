@@ -1,147 +1,183 @@
 <?php
-$page_title = 'Interrogations – Cryptic Quest';
-require_once __DIR__ . '/includes/config.php';
+require_once 'game_state.php';
+require_detective();
 
-$caseId = get_active_case_id();
-$case   = get_active_case();
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $note = trim($_POST['quick_note'] ?? '');
-    if ($note !== '') {
-        $_SESSION['interrogation_notes'][] = $note;
-    }
-    header('Location: interrogations.php');
+$caseId = (int)($_GET['case'] ?? 1);
+$cases  = get_cases();
+if (!isset($cases[$caseId])) {
+    header('Location: cases.php');
     exit;
 }
 
-include __DIR__ . '/includes/header.php';
+$suspects = get_suspects_for_case($caseId);
+$currentSuspectId = (int)($_GET['suspect'] ?? 1);
+if (!isset($suspects[$currentSuspectId])) {
+    $currentSuspectId = array_key_first($suspects);
+}
 
-$suspect  = $case['suspect']  ?? 'the suspect';
-$location = $case['location'] ?? 'the scene';
+$dialogueLogKey = "dialogue_case_{$caseId}_suspect_{$currentSuspectId}";
+if (!isset($_SESSION[$dialogueLogKey])) {
+    $_SESSION[$dialogueLogKey] = [];
+}
+
+$response = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['save_notes'])) {
+        save_notes_for_case($caseId, $_POST['notes'] ?? '');
+    }
+    if (isset($_POST['question_id'])) {
+        $q = $_POST['question_id'];
+        $suspectName = $suspects[$currentSuspectId]['name'];
+
+        switch ($q) {
+            case 'alibi':
+                $response = "$suspectName hesitates and says they were handling security checks during the time of the theft.";
+                add_evidence($caseId, "alibi_$currentSuspectId", "$suspectName claims to be on duty during the theft.");
+                set_case_progress($caseId, max(get_case_progress($caseId), 65));
+                break;
+            case 'relationship':
+                $response = "$suspectName admits they’ve worked with the victim for years but avoids emotional details.";
+                add_evidence($caseId, "relationship_$currentSuspectId", "$suspectName has a long-term working relationship with the victim.");
+                break;
+            case 'contradiction':
+                $response = "You confront $suspectName with the gala invitation time. They stumble over their explanation.";
+                add_evidence($caseId, "lie_$currentSuspectId", "$suspectName’s story doesn’t match the invitation time.");
+                set_case_progress($caseId, max(get_case_progress($caseId), 80));
+                break;
+            case 'motive':
+                $response = "$suspectName finally snaps: ‘You don’t understand what they did to me.’ A strong motive emerges.";
+                add_evidence($caseId, "motive_$currentSuspectId", "$suspectName shows strong resentment towards the victim.");
+                set_case_progress($caseId, max(get_case_progress($caseId), 90));
+                break;
+            default:
+                $response = "$suspectName shrugs and refuses to add anything more.";
+        }
+
+        $_SESSION[$dialogueLogKey][] = [
+            'question' => $q,
+            'response' => $response,
+        ];
+    }
+}
+
+$dialogueLog    = $_SESSION[$dialogueLogKey];
+$currentSuspect = $suspects[$currentSuspectId];
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interrogations – <?php echo htmlspecialchars(get_case_title($caseId)); ?></title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<?php render_header('Suspect Interrogations'); ?>
 
-<section>
-    <div class="page-header">
-        <h1>Interrogations</h1>
-        <p class="page-subtitle">
-            Ask focused questions and capture short notes as you go.
-        </p>
-    </div>
+<main class="main-layout with-sidebar">
+    <section class="interrogation-room">
+        <a href="case_dashboard.php?case=<?php echo $caseId; ?>" class="back-button">← Back to Case Dashboard</a>
 
-    <section class="card-grid">
-        <!-- Quick note card -->
-        <article class="card form-card" style="max-width:none;">
-            <div class="card-title">Quick Note</div>
-            <p class="card-subtitle">Short summary from the latest interrogation.</p>
+        <header class="section-header">
+            <h2>Suspect Interrogations</h2>
+            <p>Choose a suspect, read their profile, and ask targeted questions.</p>
+        </header>
 
-            <form method="post">
-                <div class="form-group">
-                    <label for="quick_note">Note</label>
-                    <textarea id="quick_note"
-                              name="quick_note"
-                              placeholder="Short summary of the interrogation..."></textarea>
+        <div class="interrogation-layout">
+            <aside class="suspect-list-panel">
+                <h3>Suspects</h3>
+                <ul class="suspect-list">
+                    <?php foreach ($suspects as $id => $s): ?>
+                        <li class="<?php echo $id === $currentSuspectId ? 'active-suspect' : ''; ?>">
+                            <a href="interrogations.php?case=<?php echo $caseId; ?>&suspect=<?php echo $id; ?>">
+                                <div class="suspect-row">
+                                    <img src="<?php echo htmlspecialchars($s['image']); ?>"
+                                         alt="<?php echo htmlspecialchars($s['name']); ?>"
+                                         class="suspect-avatar-small">
+                                    <div class="suspect-row-text">
+                                        <span class="suspect-name"><?php echo htmlspecialchars($s['name']); ?></span>
+                                        <span class="suspect-role"><?php echo htmlspecialchars($s['role']); ?></span>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </aside>
+
+            <div class="suspect-detail-panel">
+                <div class="suspect-profile-card">
+                    <img
+                        src="<?php echo htmlspecialchars($currentSuspect['image']); ?>"
+                        alt="<?php echo htmlspecialchars($currentSuspect['name']); ?>"
+                        class="suspect-avatar-large"
+                    >
+                    <div class="suspect-info">
+                        <h3><?php echo htmlspecialchars($currentSuspect['name']); ?></h3>
+                        <p class="suspect-role-line"><?php echo htmlspecialchars($currentSuspect['role']); ?></p>
+                        <p class="suspect-traits">
+                            Traits:
+                            <?php echo htmlspecialchars(implode(', ', $currentSuspect['traits'])); ?>
+                        </p>
+                    </div>
                 </div>
-                <button type="submit" class="btn">Add Note</button>
-            </form>
-        </article>
 
-        <!-- Suggested questions card -->
-        <article class="card">
-            <div class="card-title">Suggested Questions</div>
-            <p class="card-subtitle">
-                Use these prompts to pressure <?php echo htmlspecialchars($suspect); ?>.
-            </p>
-            <ul style="font-size:0.85rem; color:var(--text-soft); padding-left:1.2rem;">
-                <li>“Walk me through your exact movements near <?php echo htmlspecialchars($location); ?>.”</li>
-                <li>“Who can confirm seeing you between the key timestamps?”</li>
-                <li>“Why does your story differ from the camera timeline?”</li>
-                <li>“Explain your connection to any missing items or people.”</li>
-                <li>“Is there any reason your fingerprints would appear on the evidence?”</li>
-                <li>“What did you notice that felt out of place that night?”</li>
-            </ul>
-        </article>
+                <div class="dialogue-section">
+                    <div class="dialogue-log">
+                        <?php if (empty($dialogueLog)): ?>
+                            <p class="dialogue-placeholder">
+                                The room is dim, a single light overhead. Start the interrogation by choosing a question.
+                            </p>
+                        <?php else: ?>
+                            <?php foreach ($dialogueLog as $entry): ?>
+                                <div class="dialogue-entry">
+                                    <div class="dialogue-question">
+                                        <span class="speaker-label">You:</span>
+                                        <span class="dialogue-text">
+                                            <?php
+                                            switch ($entry['question']) {
+                                                case 'alibi': echo '“Where were you during the time of the theft?”'; break;
+                                                case 'relationship': echo '“How did you know the victim?”'; break;
+                                                case 'contradiction': echo '“Your story doesn’t match the invitation time. Explain.”'; break;
+                                                case 'motive': echo '“Why would anyone want to steal that bracelet?”'; break;
+                                                default: echo '“Tell me more about that night.”';
+                                            }
+                                            ?>
+                                        </span>
+                                    </div>
+                                    <div class="dialogue-response">
+                                        <span class="speaker-label"><?php echo htmlspecialchars($currentSuspect['name']); ?>:</span>
+                                        <span class="dialogue-text"><?php echo htmlspecialchars($entry['response']); ?></span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <form method="post" class="question-choices">
+                        <h4>Choose Your Question</h4>
+                        <div class="question-buttons">
+                            <button type="submit" name="question_id" value="alibi" class="btn-secondary">
+                                Ask about their alibi
+                            </button>
+                            <button type="submit" name="question_id" value="relationship" class="btn-secondary">
+                                Ask about their relationship with the victim
+                            </button>
+                            <button type="submit" name="question_id" value="contradiction" class="btn-secondary">
+                                Confront inconsistencies
+                            </button>
+                            <button type="submit" name="question_id" value="motive" class="btn-secondary">
+                                Push on possible motive
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </section>
 
-    <?php if (!empty($_SESSION['interrogation_notes'])): ?>
-        <section style="margin-top:1.4rem;">
-            <article class="card">
-                <div class="card-title">Recent Notes</div>
-                <ul class="notes-list">
-                    <?php foreach (array_reverse($_SESSION['interrogation_notes']) as $note): ?>
-                        <li><?php echo htmlspecialchars($note); ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            </article>
-        </section>
-    <?php endif; ?>
-</section>
-
-<!-- Floating notebook button -->
-<button type="button" class="floating-notes" id="open-notes" aria-label="Open notebook">
-    📓
-</button>
-
-<!-- Notebook popup -->
-<div class="notes-backdrop" id="notes-backdrop"></div>
-<div class="notes-modal" id="notes-modal">
-    <div class="notes-modal-content">
-        <div class="notes-modal-header">
-            <h2>Notebook</h2>
-            <button type="button" data-close-notes>&times;</button>
-        </div>
-
-        <form method="post">
-            <div class="form-group">
-                <label for="note_text">Add a note</label>
-                <textarea id="note_text"
-                          name="quick_note"
-                          placeholder="Write a quick observation..."></textarea>
-            </div>
-            <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.3rem;">
-                <button type="button" class="btn btn-secondary" data-close-notes>Close</button>
-                <button type="submit" class="btn">Save</button>
-            </div>
-        </form>
-
-        <?php if (!empty($_SESSION['interrogation_notes'])): ?>
-            <hr style="border-color:rgba(15,23,42,0.9); margin:0.7rem 0;">
-            <div style="font-size:0.8rem; color:var(--text-soft);">
-                <strong>Notebook entries</strong>
-                <ul class="notes-list">
-                    <?php foreach (array_reverse($_SESSION['interrogation_notes']) as $note): ?>
-                        <li><?php echo htmlspecialchars($note); ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-        <?php endif; ?>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const openBtn   = document.getElementById('open-notes');
-    const backdrop  = document.getElementById('notes-backdrop');
-    const modal     = document.getElementById('notes-modal');
-    const closeEls  = document.querySelectorAll('[data-close-notes]');
-
-    if (!openBtn || !backdrop || !modal) return;
-
-    function openNotes() {
-        backdrop.classList.add('is-visible');
-        modal.classList.add('is-visible');
-    }
-
-    function closeNotes() {
-        backdrop.classList.remove('is-visible');
-        modal.classList.remove('is-visible');
-    }
-
-    openBtn.addEventListener('click', openNotes);
-    backdrop.addEventListener('click', closeNotes);
-    closeEls.forEach(function (el) {
-        el.addEventListener('click', closeNotes);
-    });
-});
-</script>
-
-<?php include __DIR__ . '/includes/footer.php'; ?>
+    <?php render_evidence_bag_sidebar($caseId); ?>
+    <?php render_notebook($caseId); ?>
+</main>
+</body>
+</html>
