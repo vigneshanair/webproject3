@@ -1,82 +1,66 @@
 <?php
-$page_title = 'Cases – Cryptic Quest';
-require_once __DIR__ . '/includes/config.php';
+// cases.php
+require_once 'game_state.php';
+require_detective();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action  = $_POST['action'] ?? '';
-    $caseId  = $_POST['case_id'] ?? '';
-
-    if ($action === 'priority') {
-        $_SESSION['priority_case'] = $caseId;
-        $_SESSION['active_case']   = $caseId;
-    } elseif ($action === 'open') {
-        set_active_case($caseId);
-        header('Location: case_dashboard.php');
-        exit;
-    }
-}
-
-include __DIR__ . '/includes/header.php';
-
-$currentLevel = (int)$_SESSION['current_level'];
+$cases = get_cases();
+$maxUnlocked = get_max_unlocked_case();
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Case Board – Cryptic Quest</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<?php render_header('Case Board'); ?>
 
-<section>
-    <div class="page-header">
-        <h1>Cases</h1>
-        <p class="page-subtitle">
-            Choose which investigation to focus on. Set a priority case and open it in the dashboard.
+<main class="main-layout">
+    <section class="case-board">
+        <h2>Case Board</h2>
+        <p class="case-board-subtitle">
+            Each solved case unlocks the next. Choose your next investigation, detective.
         </p>
-    </div>
 
-    <form method="post" class="card-grid">
-        <?php global $CASES; ?>
-        <?php foreach ($CASES as $id => $case): ?>
-            <?php
-            $isPriority = ($_SESSION['priority_case'] === $id);
-            $progress   = get_case_progress($id);
+        <div class="case-grid">
+            <?php foreach ($cases as $id => $case): 
+                $unlocked = ($id <= $maxUnlocked);
+                $progress = get_case_progress($id);
+                $completed = ($progress === 100);
             ?>
-            <article class="card">
-                <div class="card-title">
-                    <?php echo htmlspecialchars($case['title']); ?>
+            <div class="case-card <?php echo $unlocked ? '' : 'case-locked'; ?>">
+                <div class="case-card-header">
+                    <span class="case-number">CASE 0<?php echo $id; ?></span>
+                    <span class="case-difficulty"><?php echo htmlspecialchars($case['difficulty']); ?></span>
                 </div>
-                <div class="card-subtitle">
-                    Level <?php echo (int)$case['level']; ?> •
-                    Location: <?php echo htmlspecialchars($case['location']); ?>
-                </div>
-                <p style="font-size:0.85rem; color:var(--text-soft); margin-bottom:0.6rem;">
-                    <?php echo htmlspecialchars($case['summary']); ?>
-                </p>
+                <h3><?php echo htmlspecialchars($case['title']); ?></h3>
+                <p class="case-tagline"><?php echo htmlspecialchars($case['tagline']); ?></p>
 
-                <div class="progress-card" style="font-size:0.8rem;">
-                    Progress: <strong><?php echo $progress; ?>%</strong>
-                    <div class="progress-track">
-                        <div class="progress-fill" style="width: <?php echo $progress; ?>%;"></div>
-                    </div>
+                <div class="mini-progress-bar">
+                    <div class="mini-progress-fill" style="width: <?php echo $progress; ?>%;"></div>
                 </div>
+                <p class="mini-progress-label"><?php echo $progress; ?>% complete</p>
 
-                <div class="card-footer">
-                    <div>
-                        <?php if ($isPriority): ?>
-                            <span class="badge badge-easy">Priority Case</span>
+                <div class="case-card-footer">
+                    <?php if ($unlocked): ?>
+                        <a href="case_dashboard.php?case=<?php echo $id; ?>" class="btn-secondary">
+                            <?php echo $completed ? 'Review Case' : 'Enter Case'; ?>
+                        </a>
+                        <?php if ($completed): ?>
+                            <span class="status-pill status-solved">SOLVED</span>
                         <?php else: ?>
-                            <span class="badge">Available</span>
+                            <span class="status-pill status-active">ACTIVE</span>
                         <?php endif; ?>
-                    </div>
-
-                    <div style="display:flex; gap:0.4rem;">
-                        <input type="hidden" name="case_id" value="<?php echo htmlspecialchars($id); ?>">
-                        <button class="btn-secondary" name="action" value="priority" type="submit">
-                            Set Priority
-                        </button>
-                        <button class="btn" name="action" value="open" type="submit">
-                            Open
-                        </button>
-                    </div>
+                    <?php else: ?>
+                        <span class="lock-icon">🔒 Locked</span>
+                        <span class="status-pill status-locked">COMPLETE PREVIOUS CASE</span>
+                    <?php endif; ?>
                 </div>
-            </article>
-        <?php endforeach; ?>
-    </form>
-</section>
-
-<?php include __DIR__ . '/includes/footer.php'; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+</main>
+</body>
+</html>
