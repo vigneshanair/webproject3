@@ -1,45 +1,85 @@
 <?php
-$page_title = 'Case Files';
-require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/game_logic.php';
 
-$rows = [];
-$path = __DIR__ . '/data/solved_cases.csv';
+$playerId = get_player_id($pdo);
+if (!$playerId) { header('Location:index.php'); exit; }
 
-if (file_exists($path) && ($fp = fopen($path, 'r')) !== false) {
-    while (($data = fgetcsv($fp)) !== false) {
-        if (count($data) >= 5) {
-            $rows[] = [
-                'time'  => $data[0],
-                'name'  => $data[1],
-                'id'    => $data[2],
-                'title' => $data[3],
-                'score' => (int)$data[4],
-            ];
-        }
-    }
-    fclose($fp);
-}
+$caseId = isset($_GET['case']) ? (int)$_GET['case'] : 1;
 
-include __DIR__ . '/includes/header.php';
+$c = $pdo->prepare("SELECT * FROM cases WHERE id=?");
+$c->execute([$caseId]);
+$case = $c->fetch();
+if (!$case) die('Invalid case');
+
+$s = $pdo->prepare("SELECT * FROM suspects WHERE case_id=?");
+$s->execute([$caseId]);
+$suspects = $s->fetchAll();
+
+$e = $pdo->prepare("SELECT * FROM evidence WHERE case_id=?");
+$e->execute([$caseId]);
+$allEvidence = $e->fetchAll();
+
+$bag = get_evidence_for_case($caseId);
 ?>
-<h1>Case Files Archive</h1>
-<p class="tagline">Completed investigations and who solved them.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Case File</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="main-header">
+  <h1>Case File – Case <?= $caseId ?></h1>
+  <a href="case_dashboard.php?case=<?= $caseId ?>">← Back to Case</a>
+</header>
+<main class="content">
+  <section class="case-summary">
+    <h2>Summary</h2>
+    <p><?= nl2br(htmlspecialchars($case['description'])) ?></p>
+  </section>
 
-<article class="card">
-    <?php if (empty($rows)): ?>
-        <p class="muted">No cases solved yet.</p>
+  <section class="case-suspects">
+    <h2>Suspect Profiles</h2>
+    <div class="suspect-grid">
+      <?php foreach ($suspects as $s): ?>
+        <div class="suspect-card">
+          <h3><?= htmlspecialchars($s['name']) ?></h3>
+          <p><strong>Role:</strong> <?= htmlspecialchars($s['role']) ?></p>
+          <p><strong>Personality:</strong> <?= htmlspecialchars($s['personality']) ?></p>
+          <p><?= nl2br(htmlspecialchars($s['backstory'])) ?></p>
+          <?php if ($s['is_primary']): ?>
+            <span class="primary-badge">Primary Suspect</span>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  </section>
+
+  <section class="case-evidence">
+    <h2>Evidence Collected</h2>
+    <?php if (empty($bag)): ?>
+      <p>No evidence collected yet.</p>
     <?php else: ?>
-        <ul class="simple-list">
-            <?php foreach (array_reverse($rows) as $r): ?>
-                <li>
-                    <strong><?php echo htmlspecialchars($r['title']); ?></strong>
-                    (<?php echo htmlspecialchars($r['id']); ?>)<br>
-                    Solved by <?php echo htmlspecialchars($r['name']); ?> –
-                    Score: <?php echo $r['score']; ?> –
-                    <span class="muted"><?php echo htmlspecialchars($r['time']); ?></span>
-                </li>
-            <?php endforeach; ?>
-        </ul>
+      <ul>
+        <?php foreach ($bag as $item): ?>
+          <li><?= htmlspecialchars($item['label']) ?> (<?= htmlspecialchars($item['time']) ?>)</li>
+        <?php endforeach; ?>
+      </ul>
     <?php endif; ?>
-</article>
-<?php include __DIR__ . '/includes/footer.php'; ?>
+
+    <h2>Evidence Still Missing</h2>
+    <ul>
+      <?php foreach ($allEvidence as $ev):
+        $found = false;
+        foreach ($bag as $b) {
+          if (stripos($b['label'],$ev['name']) !== false) { $found = true; break; }
+        }
+        if (!$found): ?>
+          <li><?= htmlspecialchars($ev['name']) ?> – Location: <?= htmlspecialchars($ev['location']) ?></li>
+        <?php endif; endforeach; ?>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

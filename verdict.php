@@ -1,36 +1,64 @@
-<?php
-// verdict.php
-require_once 'game_state.php';
-require_detective();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Final Verdict – Cryptic Quest</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-$caseId = (int)($_GET['case'] ?? 1);
-$cases  = get_cases();
-if (!isset($cases[$caseId])) {
-    header('Location: cases.php'); exit;
+    <!-- 🔥 THIS IS WHERE THE CSS GOES 🔥 -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<?php
+// verdict.php – Final Case Report screen (themed)
+
+require 'game_logic.php';
+
+// Which case are we finishing?
+$caseId = isset($_GET['case_id']) ? (int)$_GET['case_id'] : 1;
+
+// Get current player
+$playerId = get_player_id($pdo);
+if (!$playerId) {
+    header('Location: index.php');
+    exit;
 }
 
-$suspects = get_suspects_for_case($caseId);
-$evidence = get_evidence_for_case($caseId);
-$verdictMsg = null;
+// Load case info
+$caseStmt = $pdo->prepare("SELECT id, title, description, difficulty FROM cases WHERE id = ?");
+$caseStmt->execute([$caseId]);
+$case = $caseStmt->fetch();
 
-$correctCulpritId = 1; // Lena for case 1
+// Load suspects for dropdown
+$susStmt = $pdo->prepare("SELECT id, name FROM suspects WHERE case_id = ? ORDER BY name");
+$susStmt->execute([$caseId]);
+$suspects = $susStmt->fetchAll();
+
+// Evidence from session “evidence bag”
+$evidenceItems = get_evidence_for_case($caseId);
+
+// Handle form submit
+$successMessage = '';
+$errorMessage   = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['save_notes'])) {
-        save_notes_for_case($caseId, $_POST['notes'] ?? '');
-    }
+    $primarySuspectId = isset($_POST['primary_suspect']) ? (int)$_POST['primary_suspect'] : 0;
+    $motive           = trim($_POST['motive'] ?? '');
 
-    if (isset($_POST['culprit_id'])) {
-        $chosen = (int)$_POST['culprit_id'];
-        $motive = trim($_POST['motive'] ?? '');
+    if ($primarySuspectId <= 0) {
+        $errorMessage = 'Please choose a primary suspect.';
+    } elseif ($motive === '') {
+        $errorMessage = 'Please describe the motive in your own words.';
+    } else {
+        // Simple scoring: number of clues collected
+        $score = count($evidenceItems);
 
-        if ($chosen === $correctCulpritId) {
-            $verdictMsg = "CASE CLOSED – Your report nails the culprit with solid evidence.";
-            set_case_progress($caseId, 100);
-        } else {
-            $verdictMsg = "CASE UNSOLVED – Your accusation doesn’t align with critical evidence. The truth remains hidden.";
-            set_case_progress($caseId, max(get_case_progress($caseId), 90));
-        }
+        // You can encode the solution as "caseId:suspectId"
+        $solutionCode = 'CASE' . $caseId . ':SUSPECT' . $primarySuspectId;
+
+        // Record solution + leaderboard update
+        record_case_solution($pdo, $playerId, $caseId, $solutionCode, $score);
+
+        $successMessage = 'Final report submitted! Your investigation has been logged to the leaderboard.';
     }
 }
 ?>
@@ -38,73 +66,130 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Final Verdict – <?php echo htmlspecialchars(get_case_title($caseId)); ?></title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Final Verdict – Cryptic Quest</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- IMPORTANT: same stylesheet as your other dark-theme pages -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-<?php render_header('Final Verdict'); ?>
-
-<main class="main-layout with-sidebar">
-    <section class="verdict-page">
-        <a href="case_dashboard.php?case=<?php echo $caseId; ?>" class="back-link">
-            ← Back to Case Dashboard
-        </a>
-
-        <h2>Submit Final Case Report</h2>
-        <p class="section-intro">
-            Review your suspects and evidence, then submit your official verdict to the department.
-        </p>
-
-        <?php if (!empty($verdictMsg)): ?>
-            <div class="verdict-message <?php echo (get_case_progress($caseId) === 100) ? 'case-closed' : 'case-unsolved'; ?>">
-                <?php echo htmlspecialchars($verdictMsg); ?>
-            </div>
-        <?php endif; ?>
-
-        <div class="verdict-layout">
-            <div class="verdict-report">
-                <h3>Case Summary</h3>
-                <p><strong>Case:</strong> <?php echo htmlspecialchars(get_case_title($caseId)); ?></p>
-
-                <h4>Collected Evidence</h4>
-                <ul class="verdict-evidence-list">
-                    <?php if (empty($evidence)): ?>
-                        <li>No evidence logged. This report will be very weak.</li>
-                    <?php else: ?>
-                        <?php foreach ($evidence as $label): ?>
-                            <li><?php echo htmlspecialchars($label); ?></li>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </ul>
-
-                <form method="post" class="verdict-form">
-                    <h4>Primary Suspect</h4>
-                    <select name="culprit_id" required>
-                        <option value="">Select a suspect</option>
-                        <?php foreach ($suspects as $id => $s): ?>
-                            <option value="<?php echo $id; ?>">
-                                <?php echo htmlspecialchars($s['name'] . ' – ' . $s['role']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-
-                    <h4>Motive (your summary)</h4>
-                    <textarea name="motive" rows="4"
-                              placeholder="Summarize the motive based on what you’ve uncovered."></textarea>
-
-                    <button type="submit" class="btn-primary">Submit Final Report</button>
-                </form>
-
-                <div class="verdict-actions">
-                    <a href="cases.php" class="btn-secondary">Back to Case Board</a>
-                    <a href="leaderboard.php" class="btn-secondary">View Leaderboard</a>
-                </div>
-            </div>
+<body class="app-body">
+    <header class="top-nav">
+        <div class="top-nav-left">
+            <a href="case_dashboard.php?case_id=<?php echo $caseId; ?>" class="btn-back">
+                ← Back to Case Dashboard
+            </a>
         </div>
-    </section>
+        <div class="top-nav-right">
+            <span class="badge">Rookie Detective <?php echo htmlspecialchars($_SESSION['player_name'] ?? ''); ?></span>
+        </div>
+    </header>
 
-    <?php render_evidence_bag_sidebar($caseId); ?>
-    <?php render_notebook($caseId); ?>
-</main>
+    <main class="page page-final-verdict">
+        <section class="page-header">
+            <h1 class="page-title">Submit Final Case Report</h1>
+            <p class="page-subtitle">
+                Review your suspects and evidence, then submit your official verdict to the department.
+            </p>
+        </section>
+
+        <div class="page-grid">
+            <!-- LEFT: Case summary + form -->
+            <section class="card card-main">
+                <div class="card-header">
+                    <h2 class="card-title">Case Summary</h2>
+                    <?php if ($case): ?>
+                        <p class="case-meta">
+                            <span class="case-name">
+                                Case: <?php echo htmlspecialchars($case['title']); ?>
+                            </span>
+                            <span class="case-difficulty">
+                                Difficulty: <?php echo htmlspecialchars($case['difficulty']); ?>
+                            </span>
+                        </p>
+                    <?php endif; ?>
+                </div>
+
+                <div class="card-body">
+                    <div class="section-block">
+                        <h3 class="section-title">Collected Evidence</h3>
+                        <?php if ($evidenceItems): ?>
+                            <ul class="evidence-list">
+                                <?php foreach ($evidenceItems as $item): ?>
+                                    <li><?php echo htmlspecialchars($item['label']); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <p class="muted">No evidence collected yet for this case.</p>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="section-block">
+                        <h3 class="section-title">Final Verdict</h3>
+
+                        <?php if ($errorMessage): ?>
+                            <div class="alert alert-error">
+                                <?php echo htmlspecialchars($errorMessage); ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($successMessage): ?>
+                            <div class="alert alert-success">
+                                <?php echo htmlspecialchars($successMessage); ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <form method="post" class="form-vertical">
+                            <div class="form-group">
+                                <label for="primary_suspect" class="form-label">Primary Suspect</label>
+                                <select id="primary_suspect" name="primary_suspect" class="form-select">
+                                    <option value="0">Select a suspect</option>
+                                    <?php foreach ($suspects as $s): ?>
+                                        <option value="<?php echo $s['id']; ?>">
+                                            <?php echo htmlspecialchars($s['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="motive" class="form-label">Motive (your summary)</label>
+                                <textarea id="motive"
+                                          name="motive"
+                                          rows="4"
+                                          class="form-textarea"
+                                          placeholder="Summarize the motive based on what you've uncovered."><?php
+                                    echo htmlspecialchars($_POST['motive'] ?? '');
+                                ?></textarea>
+                            </div>
+
+                            <button type="submit" class="btn-primary">
+                                Submit Final Report
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT: Evidence bag sidebar -->
+            <aside class="card card-sidebar">
+                <div class="card-header">
+                    <h2 class="card-title">Evidence Bag</h2>
+                    <p class="card-subtitle">
+                        <?php echo count($evidenceItems); ?> item(s) collected
+                    </p>
+                </div>
+                <div class="card-body">
+                    <?php if ($evidenceItems): ?>
+                        <ul class="evidence-list">
+                            <?php foreach ($evidenceItems as $item): ?>
+                                <li><?php echo htmlspecialchars($item['label']); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <p class="muted">Your evidence bag is currently empty.</p>
+                    <?php endif; ?>
+                </div>
+            </aside>
+        </div>
+    </main>
 </body>
 </html>

@@ -1,183 +1,192 @@
 <?php
-require_once 'game_state.php';
-require_detective();
+$page_subtitle = 'The Vanishing Bracelet / Suspect Interrogations';
+require 'game_logic.php';
+require 'includes/header.php';
 
-$caseId = (int)($_GET['case'] ?? 1);
-$cases  = get_cases();
-if (!isset($cases[$caseId])) {
-    header('Location: cases.php');
-    exit;
+$caseId   = 1;
+$caseTitle = 'The Vanishing Bracelet';
+
+// static suspect + dialogue tree for Case 1
+$suspects = [
+    'lena' => [
+        'name' => 'Lena Hart',
+        'role' => 'Personal Assistant',
+        'traits' => 'Organised, nervous',
+        'truth_profile' => 'Mixed – hides emotional motives.',
+        'questions' => [
+            'motive' => [
+                'label' => 'Why would anyone want to steal the bracelet?',
+                'is_truth' => false,
+                'response' => '“People do desperate things when they feel ignored.” She avoids eye contact.',
+                'hint' => 'Her answer deflects. This feels like a partial lie.',
+            ],
+            'where' => [
+                'label' => 'Where were you during the theft?',
+                'is_truth' => false,
+                'response' => '“On duty near the entrance the whole time.”',
+                'hint' => 'Your timeline and prints say otherwise.',
+            ],
+            'relationship' => [
+                'label' => 'How long have you worked for the victim?',
+                'is_truth' => true,
+                'response' => '“Seven years. I managed everything – schedules, events, even personal errands.”',
+                'hint' => 'Details line up with HR records. Likely true.',
+            ],
+        ],
+    ],
+    'marco' => [
+        'name' => 'Marco Vance',
+        'role' => 'Security Guard',
+        'traits' => 'Charming, evasive',
+        'truth_profile' => 'Often hides details to protect himself.',
+        'questions' => [
+            'route' => [
+                'label' => 'Which patrol route were you on?',
+                'is_truth' => true,
+                'response' => '“North hallway, then terrace. Cameras will show I stuck to the route.”',
+                'hint' => 'Camera logs partially confirm this.',
+            ],
+            'bracelet' => [
+                'label' => 'Did you know the bracelet was so valuable?',
+                'is_truth' => false,
+                'response' => '“No idea, it just looked shiny.”',
+                'hint' => 'Security briefing notes prove otherwise.',
+            ],
+        ],
+    ],
+    'iris' => [
+        'name' => 'Iris Cole',
+        'role' => 'Art Dealer',
+        'traits' => 'Observant, calm',
+        'truth_profile' => 'Mostly truthful, but selectively silent.',
+        'questions' => [
+            'argument' => [
+                'label' => 'Did you hear an argument before the theft?',
+                'is_truth' => true,
+                'response' => '“Yes. Raised voices near the study. I recognised Lena’s voice.”',
+                'hint' => 'Matches other witness statements.',
+            ],
+            'money' => [
+                'label' => 'Were you in any financial trouble?',
+                'is_truth' => false,
+                'response' => '“Business is booming. No problems at all.”',
+                'hint' => 'Bank records show short-term debt – minor, but she’s hiding it.',
+            ],
+        ],
+    ],
+];
+
+$currentSuspectKey = $_GET['suspect'] ?? 'lena';
+if (!isset($suspects[$currentSuspectKey])) {
+    $currentSuspectKey = 'lena';
+}
+$currentSuspect = $suspects[$currentSuspectKey];
+
+$currentQuestionKey = $_GET['q'] ?? null;
+$currentAnswer = null;
+
+if ($currentQuestionKey && isset($currentSuspect['questions'][$currentQuestionKey])) {
+    $q = $currentSuspect['questions'][$currentQuestionKey];
+    $currentAnswer = $q;
 }
 
-$suspects = get_suspects_for_case($caseId);
-$currentSuspectId = (int)($_GET['suspect'] ?? 1);
-if (!isset($suspects[$currentSuspectId])) {
-    $currentSuspectId = array_key_first($suspects);
-}
-
-$dialogueLogKey = "dialogue_case_{$caseId}_suspect_{$currentSuspectId}";
-if (!isset($_SESSION[$dialogueLogKey])) {
-    $_SESSION[$dialogueLogKey] = [];
-}
-
-$response = null;
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['save_notes'])) {
-        save_notes_for_case($caseId, $_POST['notes'] ?? '');
-    }
-    if (isset($_POST['question_id'])) {
-        $q = $_POST['question_id'];
-        $suspectName = $suspects[$currentSuspectId]['name'];
-
-        switch ($q) {
-            case 'alibi':
-                $response = "$suspectName hesitates and says they were handling security checks during the time of the theft.";
-                add_evidence($caseId, "alibi_$currentSuspectId", "$suspectName claims to be on duty during the theft.");
-                set_case_progress($caseId, max(get_case_progress($caseId), 65));
-                break;
-            case 'relationship':
-                $response = "$suspectName admits they’ve worked with the victim for years but avoids emotional details.";
-                add_evidence($caseId, "relationship_$currentSuspectId", "$suspectName has a long-term working relationship with the victim.");
-                break;
-            case 'contradiction':
-                $response = "You confront $suspectName with the gala invitation time. They stumble over their explanation.";
-                add_evidence($caseId, "lie_$currentSuspectId", "$suspectName’s story doesn’t match the invitation time.");
-                set_case_progress($caseId, max(get_case_progress($caseId), 80));
-                break;
-            case 'motive':
-                $response = "$suspectName finally snaps: ‘You don’t understand what they did to me.’ A strong motive emerges.";
-                add_evidence($caseId, "motive_$currentSuspectId", "$suspectName shows strong resentment towards the victim.");
-                set_case_progress($caseId, max(get_case_progress($caseId), 90));
-                break;
-            default:
-                $response = "$suspectName shrugs and refuses to add anything more.";
-        }
-
-        $_SESSION[$dialogueLogKey][] = [
-            'question' => $q,
-            'response' => $response,
-        ];
-    }
-}
-
-$dialogueLog    = $_SESSION[$dialogueLogKey];
-$currentSuspect = $suspects[$currentSuspectId];
+$evidenceForCase = get_evidence_for_case($caseId);
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Interrogations – <?php echo htmlspecialchars(get_case_title($caseId)); ?></title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<?php render_header('Suspect Interrogations'); ?>
 
-<main class="main-layout with-sidebar">
-    <section class="interrogation-room">
-        <a href="case_dashboard.php?case=<?php echo $caseId; ?>" class="back-button">← Back to Case Dashboard</a>
+<section class="cq-section">
+    <div class="cq-section-header">
+        <h1 class="cq-title">Suspect Interrogations</h1>
+        <p class="cq-subtext">
+            Choose a suspect, select your questions carefully. Some responses reveal the truth; others are lies or dead ends.
+        </p>
+    </div>
 
-        <header class="section-header">
-            <h2>Suspect Interrogations</h2>
-            <p>Choose a suspect, read their profile, and ask targeted questions.</p>
-        </header>
+    <div class="cq-grid cq-grid-3">
+        <!-- Left: suspect list -->
+        <aside class="cq-panel">
+            <h2 class="cq-panel-title">Suspects</h2>
+            <ul class="cq-suspect-list">
+                <?php foreach ($suspects as $key => $suspect): ?>
+                    <li class="<?php echo $key === $currentSuspectKey ? 'active' : ''; ?>">
+                        <a href="interrogations.php?suspect=<?php echo urlencode($key); ?>" class="cq-suspect-link">
+                            <span class="cq-suspect-name"><?php echo htmlspecialchars($suspect['name']); ?></span>
+                            <span class="cq-suspect-role"><?php echo htmlspecialchars($suspect['role']); ?></span>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </aside>
 
-        <div class="interrogation-layout">
-            <aside class="suspect-list-panel">
-                <h3>Suspects</h3>
-                <ul class="suspect-list">
-                    <?php foreach ($suspects as $id => $s): ?>
-                        <li class="<?php echo $id === $currentSuspectId ? 'active-suspect' : ''; ?>">
-                            <a href="interrogations.php?case=<?php echo $caseId; ?>&suspect=<?php echo $id; ?>">
-                                <div class="suspect-row">
-                                    <img src="<?php echo htmlspecialchars($s['image']); ?>"
-                                         alt="<?php echo htmlspecialchars($s['name']); ?>"
-                                         class="suspect-avatar-small">
-                                    <div class="suspect-row-text">
-                                        <span class="suspect-name"><?php echo htmlspecialchars($s['name']); ?></span>
-                                        <span class="suspect-role"><?php echo htmlspecialchars($s['role']); ?></span>
-                                    </div>
-                                </div>
-                            </a>
+        <!-- Middle: dialogue area -->
+        <div class="cq-panel">
+            <h2 class="cq-panel-title"><?php echo htmlspecialchars($currentSuspect['name']); ?></h2>
+            <p class="cq-panel-sub">
+                Traits: <?php echo htmlspecialchars($currentSuspect['traits']); ?>.
+                Truth pattern: <?php echo htmlspecialchars($currentSuspect['truth_profile']); ?>
+            </p>
+
+            <div class="cq-dialogue-area">
+                <?php if ($currentAnswer): ?>
+                    <div class="cq-dialogue-bubble cq-dialogue-player">
+                        <strong>You:</strong><br>
+                        <?php echo htmlspecialchars($currentAnswer['label']); ?>
+                    </div>
+                    <div class="cq-dialogue-bubble cq-dialogue-suspect">
+                        <strong><?php echo htmlspecialchars($currentSuspect['name']); ?>:</strong><br>
+                        <?php echo htmlspecialchars($currentAnswer['response']); ?>
+                    </div>
+                    <div class="cq-truth-tag cq-truth-<?php echo $currentAnswer['is_truth'] ? 'true' : 'false'; ?>">
+                        <?php echo $currentAnswer['is_truth'] ? 'Feels truthful' : 'Feels deceptive'; ?>
+                    </div>
+                    <p class="cq-hint-text">
+                        <?php echo htmlspecialchars($currentAnswer['hint']); ?>
+                    </p>
+                <?php else: ?>
+                    <p class="cq-muted">
+                        Start by selecting a question below to interrogate this suspect.
+                        Watch how their answers line up with your evidence bag.
+                    </p>
+                <?php endif; ?>
+            </div>
+
+            <div class="cq-question-row">
+                <?php foreach ($currentSuspect['questions'] as $qKey => $q): ?>
+                    <a class="cq-pill-button"
+                       href="interrogations.php?suspect=<?php echo urlencode($currentSuspectKey); ?>&q=<?php echo urlencode($qKey); ?>">
+                        <?php echo htmlspecialchars($q['label']); ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <!-- Right: Evidence bag -->
+        <aside class="cq-panel cq-panel-right">
+            <h2 class="cq-panel-title">Evidence Bag</h2>
+            <p class="cq-panel-sub"><?php echo count($evidenceForCase); ?> items collected.</p>
+            <?php if ($evidenceForCase): ?>
+                <ul class="cq-evidence-list">
+                    <?php foreach ($evidenceForCase as $item): ?>
+                        <li>
+                            <div class="cq-evidence-label">
+                                <?php echo htmlspecialchars($item['label']); ?>
+                            </div>
+                            <div class="cq-evidence-meta">
+                                Logged at <?php echo htmlspecialchars($item['time']); ?>
+                            </div>
                         </li>
                     <?php endforeach; ?>
                 </ul>
-            </aside>
+            <?php else: ?>
+                <p class="cq-muted">
+                    You have no evidence yet. Interrogations are stronger when backed by hard facts from the scene.
+                </p>
+            <?php endif; ?>
+        </aside>
+    </div>
 
-            <div class="suspect-detail-panel">
-                <div class="suspect-profile-card">
-                    <img
-                        src="<?php echo htmlspecialchars($currentSuspect['image']); ?>"
-                        alt="<?php echo htmlspecialchars($currentSuspect['name']); ?>"
-                        class="suspect-avatar-large"
-                    >
-                    <div class="suspect-info">
-                        <h3><?php echo htmlspecialchars($currentSuspect['name']); ?></h3>
-                        <p class="suspect-role-line"><?php echo htmlspecialchars($currentSuspect['role']); ?></p>
-                        <p class="suspect-traits">
-                            Traits:
-                            <?php echo htmlspecialchars(implode(', ', $currentSuspect['traits'])); ?>
-                        </p>
-                    </div>
-                </div>
+    <div class="cq-back-row">
+        <a href="case_dashboard.php?case_id=<?php echo $caseId; ?>" class="cq-back-link">← Back to Case Dashboard</a>
+    </div>
+</section>
 
-                <div class="dialogue-section">
-                    <div class="dialogue-log">
-                        <?php if (empty($dialogueLog)): ?>
-                            <p class="dialogue-placeholder">
-                                The room is dim, a single light overhead. Start the interrogation by choosing a question.
-                            </p>
-                        <?php else: ?>
-                            <?php foreach ($dialogueLog as $entry): ?>
-                                <div class="dialogue-entry">
-                                    <div class="dialogue-question">
-                                        <span class="speaker-label">You:</span>
-                                        <span class="dialogue-text">
-                                            <?php
-                                            switch ($entry['question']) {
-                                                case 'alibi': echo '“Where were you during the time of the theft?”'; break;
-                                                case 'relationship': echo '“How did you know the victim?”'; break;
-                                                case 'contradiction': echo '“Your story doesn’t match the invitation time. Explain.”'; break;
-                                                case 'motive': echo '“Why would anyone want to steal that bracelet?”'; break;
-                                                default: echo '“Tell me more about that night.”';
-                                            }
-                                            ?>
-                                        </span>
-                                    </div>
-                                    <div class="dialogue-response">
-                                        <span class="speaker-label"><?php echo htmlspecialchars($currentSuspect['name']); ?>:</span>
-                                        <span class="dialogue-text"><?php echo htmlspecialchars($entry['response']); ?></span>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-
-                    <form method="post" class="question-choices">
-                        <h4>Choose Your Question</h4>
-                        <div class="question-buttons">
-                            <button type="submit" name="question_id" value="alibi" class="btn-secondary">
-                                Ask about their alibi
-                            </button>
-                            <button type="submit" name="question_id" value="relationship" class="btn-secondary">
-                                Ask about their relationship with the victim
-                            </button>
-                            <button type="submit" name="question_id" value="contradiction" class="btn-secondary">
-                                Confront inconsistencies
-                            </button>
-                            <button type="submit" name="question_id" value="motive" class="btn-secondary">
-                                Push on possible motive
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <?php render_evidence_bag_sidebar($caseId); ?>
-    <?php render_notebook($caseId); ?>
-</main>
-</body>
-</html>
+<?php require 'includes/footer.php'; ?>
