@@ -1,6 +1,13 @@
 <?php
-// header.php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$activeCaseId = isset($_GET['case'])
+    ? (int)$_GET['case']
+    : ($_SESSION['active_case_id'] ?? 1);
 ?>
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,7 +19,7 @@
 <header class="main-header">
   <h1>🕵️‍♂️ Cryptic Quest: Crime Scene Investigation</h1>
   <nav>
-    <a href="dashboard.php">Dashboard</a>
+    <a href="case_dashboard.php">Dashboard</a>
     <a href="leaderboard.php">Leaderboard</a>
   </nav>
 </header>

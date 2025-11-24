@@ -83,6 +83,218 @@ if ($selectedLeadKey) {
 $evidenceForCase = get_evidence_for_case($caseId);
 ?>
 
+<!-- INLINE CSS JUST FOR THIS PAGE -->
+<style>
+    body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #111827, #020617);
+        color: #e5e7eb;
+        margin: 0;
+        padding: 32px 12px;
+    }
+
+    nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    nav a {
+        text-decoration: none;
+        font-size: 13px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        color: #e5e7eb;
+        background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent);
+    }
+
+    nav a:hover {
+        background: rgba(30, 64, 175, 0.6);
+    }
+
+    .cq-section {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: rgba(15, 23, 42, 0.96);
+        border-radius: 18px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
+        padding: 22px 24px 26px;
+    }
+
+    .cq-section-header {
+        margin-bottom: 14px;
+    }
+
+    .cq-title {
+        font-size: 24px;
+        margin-bottom: 4px;
+    }
+
+    .cq-subtext {
+        font-size: 13px;
+        color: #9ca3af;
+    }
+
+    .cq-grid {
+        display: grid;
+        gap: 18px;
+    }
+
+    .cq-grid-3 {
+        grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.7fr) minmax(0, 1.3fr);
+    }
+
+    .cq-panel {
+        background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent);
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        padding: 14px 16px 12px;
+    }
+
+    .cq-panel-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .cq-panel-sub {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-bottom: 10px;
+    }
+
+    .cq-zone-block {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
+    .cq-zone-header {
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .cq-zone-tagline {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-bottom: 4px;
+    }
+
+    .cq-lead-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    .cq-lead-list li {
+        margin-bottom: 4px;
+    }
+
+    .cq-lead-link {
+        font-size: 13px;
+        color: #93c5fd;
+        text-decoration: none;
+    }
+
+    .cq-lead-link:hover {
+        text-decoration: underline;
+    }
+
+    .cq-callout {
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+
+    .cq-callout-good {
+        background: rgba(22, 163, 74, 0.12);
+        border: 1px solid rgba(22, 163, 74, 0.7);
+    }
+
+    .cq-callout-dead {
+        background: rgba(248, 113, 113, 0.12);
+        border: 1px solid rgba(248, 113, 113, 0.7);
+    }
+
+    .cq-callout-label {
+        font-weight: 600;
+        margin-bottom: 3px;
+    }
+
+    .cq-callout-hint {
+        font-size: 12px;
+        color: #e5e7eb;
+        margin-top: 4px;
+    }
+
+    .cq-muted {
+        font-size: 13px;
+        color: #9ca3af;
+    }
+
+    .cq-tip-box {
+        margin-top: 10px;
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px dashed rgba(148, 163, 184, 0.7);
+        color: #e5e7eb;
+    }
+
+    .cq-panel-right {
+        background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.16), transparent);
+    }
+
+    .cq-evidence-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 8px 0 0;
+    }
+
+    .cq-evidence-list li {
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
+    .cq-evidence-label {
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .cq-evidence-meta {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 1px;
+    }
+
+    .cq-back-row {
+        margin-top: 16px;
+        text-align: left;
+    }
+
+    .cq-back-link {
+        font-size: 13px;
+        color: #93c5fd;
+        text-decoration: none;
+    }
+
+    .cq-back-link:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 900px) {
+        .cq-grid-3 {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
 <section class="cq-section">
     <div class="cq-section-header">
         <h1 class="cq-title">Study the Scene</h1>

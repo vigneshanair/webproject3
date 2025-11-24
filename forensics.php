@@ -1,8 +1,12 @@
 <?php
-// forensic_lab.php
-require_once 'game_logic.php';
+// forensics.php – Forensic Lab
+$page_subtitle = 'The Vanishing Bracelet / Forensic Lab';
 
-$caseId = isset($_GET['case_id']) ? (int)$_GET['case_id'] : 1;
+require_once 'game_logic.php';
+require_once 'includes/header.php';
+
+// Keep the same param style as other pages: ?case=1
+$caseId = isset($_GET['case']) ? (int)$_GET['case'] : 1;
 
 // Get evidence from session for this case
 $evidenceForCase = get_evidence_for_case($caseId);
@@ -38,20 +42,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <title>Forensic Lab – Cryptic Quest</title>
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- keep global styles if you have them -->
+    <link rel="stylesheet" href="css/styles.css">
     <style>
-        /* Extra styles specific to this page (still matches your dark theme) */
-
         body {
             background: #050816;
             color: #f5f5f5;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 32px 12px;
         }
 
         .cq-shell {
             max-width: 1200px;
-            margin: 40px auto;
-            padding: 0 24px 60px;
+            margin: 0 auto 40px;
+            padding: 0 24px 40px;
         }
 
         .cq-header-row {
@@ -75,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 26px;
             font-weight: 700;
             letter-spacing: 0.05em;
+            margin-bottom: 8px;
         }
 
         .cq-layout {
@@ -267,13 +274,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 <div class="cq-shell">
     <div class="cq-header-row">
-        <a href="case_dashboard.php?case_id=<?php echo $caseId; ?>" class="cq-back-link">
+        <a href="case_dashboard.php?case=<?= $caseId ?>" class="cq-back-link">
             ← Back to Case
         </a>
         <div class="cq-badge">Forensic Lab</div>
     </div>
 
-    <h1 class="cq-title">Fingerprint & Trace Analyzer</h1>
+    <h1 class="cq-title">Fingerprint &amp; Trace Analyzer</h1>
 
     <div class="cq-layout">
         <!-- LEFT: Forensic analyzer -->
@@ -360,11 +367,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     var meter = document.getElementById('matchMeter');
     if (!meter) return;
     var target = parseInt(meter.getAttribute('data-target'), 10) || 0;
-    // trigger CSS transition
     requestAnimationFrame(function () {
         meter.style.width = target + '%';
     });
 })();
 </script>
+
+<?php require 'includes/footer.php'; ?>
 </body>
 </html>
